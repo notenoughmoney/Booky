@@ -2,6 +2,7 @@ import asyncio
 import logging
 import sys
 
+from api import search_books_by_title
 from db import *
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -26,6 +27,7 @@ class States(StatesGroup):
     RECS_MENU = State()
     NEW_BOOKS_MENU = State()
     ABOUT_MENU = State()
+    ADD_BOOK = State()
 
 # Обработчик команды /start
 @router.message(CommandStart())
@@ -40,6 +42,26 @@ async def process_button_click(message: types.Message, state: FSMContext):
     read_books = db.get_read_books(user)
     await message.answer(text=f'{read_books}', reply_markup=get_library_menu_buttons())
     await state.set_state(States.LIBRARY_MENU)
+
+
+@router.message(States.LIBRARY_MENU, F.text == "Добавить книгу")
+async def process_button_click(message: types.Message, state: FSMContext):
+    await message.answer(text='Чтобы добавить книгу в библиотеку, введите её название')
+    await state.set_state(States.ADD_BOOK)
+
+
+@router.message(States.ADD_BOOK, F.text != "")
+async def process_button_click(message: types.Message, state: FSMContext):
+    books = search_books_by_title(message.text)
+    text = f"Книги найденные по запросу:"
+    for book in books:
+        text += "\n"
+        text += f"\n№ {book["id_message"]}"
+        text += f"\n{book["title"]}"
+        text += f"\n{book["author"]}"
+        text += f"\n{book["year"]}"
+    await message.answer(text=text)
+    await state.set_state(States.ADD_BOOK)
 
 
 @router.message(States.MAIN_MENU, F.text == "Рекомендации")
