@@ -2,7 +2,7 @@ import asyncio
 import logging
 import sys
 
-from api import search_books_by_title
+from api import search_books_by_title, get_newest_books
 from db import *
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -11,6 +11,7 @@ from aiogram.filters import CommandStart
 from buttons import *
 
 API_TOKEN = '7166275907:AAEu2PswJCooE_e2esz-mV9N7wEVBu3VvuI'
+bot = Bot(API_TOKEN)
 dp = Dispatcher()
 router = Router()
 dp.include_router(router)
@@ -29,6 +30,7 @@ class States(StatesGroup):
     ABOUT_MENU = State()
     ADD_BOOK = State()
 
+
 # Обработчик команды /start
 @router.message(CommandStart())
 async def start(message: types.Message, state: FSMContext):
@@ -40,7 +42,16 @@ async def start(message: types.Message, state: FSMContext):
 async def process_button_click(message: types.Message, state: FSMContext):
     user = message.from_user.id
     read_books = db.get_read_books(user)
-    await message.answer(text=f'{read_books}', reply_markup=get_library_menu_buttons())
+    if len(read_books) < 1:
+        read_books = "У вас ещё нет прочитанных книг"
+    else:
+        text = "Книги, которые вы прочитали:"
+        for counter, book in enumerate(read_books):
+            text += "\n\n№ " + str(counter)
+            text += f'\n{book["title"]}'
+            text += f'\n{book["author"]}'
+            text += f'\n{book["year"]}'
+    await message.answer(text=text, reply_markup=get_library_menu_buttons())
     await state.set_state(States.LIBRARY_MENU)
 
 
@@ -53,15 +64,17 @@ async def process_button_click(message: types.Message, state: FSMContext):
 @router.message(States.ADD_BOOK, F.text != "")
 async def process_button_click(message: types.Message, state: FSMContext):
     books = search_books_by_title(message.text)
-    text = f"Книги найденные по запросу:"
-    for book in books:
-        text += "\n"
-        text += f"\n№ {book["id_message"]}"
-        text += f"\n{book["title"]}"
-        text += f"\n{book["author"]}"
-        text += f"\n{book["year"]}"
+    # TODO Проверку на уникальность книг
+    # Пока что добавляем только первую попавшуюся книгу
+    db.add_book(
+        user=message.from_user.id,
+        title=books[0]["title"],
+        author=books[0]["author"],
+        year=books[0]["year"]
+    )
+    text = f"В вашу библиотеку была добавлена книга:"
     await message.answer(text=text)
-    await state.set_state(States.ADD_BOOK)
+    await state.set_state(States.LIBRARY_MENU)
 
 
 @router.message(States.MAIN_MENU, F.text == "Рекомендации")
@@ -72,21 +85,35 @@ async def process_button_click(message: types.Message, state: FSMContext):
 
 @router.message(States.MAIN_MENU, F.text == "Новинки")
 async def process_button_click(message: types.Message, state: FSMContext):
-    await message.answer(f"Этот раздел ещё недоступен")
-    await state.set_state(States.NEW_BOOKS_MENU)
+    user = message.from_user.id
+    newest_books = get_newest_books(user)
+    text = "Новинки, которые вы могли пропустить:"
+    for counter, book in enumerate(newest_books):
+        text += "\n\n№ " + str(counter)
+        text += f'\n{book["title"]}'
+        text += f'\n{book["author"]}'
+        text += f'\n{book["year"]}'
+    await message.answer(text=text)
 
 
 @router.message(States.MAIN_MENU, F.text == "О нас")
 async def process_button_click(message: types.Message, state: FSMContext):
-    await message.answer(f"Этот раздел ещё недоступен")
-    await state.set_state(States.ABOUT_MENU)
+    about_file = "about.txt"
+    text = "Этот раздел временно недоступен"
+    try:
+        with open(about_file, 'r', encoding='utf-8') as file:
+            text = file.read()
+    except FileNotFoundError:
+        pass
+    except Exception as e:
+        pass
+    await message.answer(text=text)
 
 
 async def main() -> None:
-    # Initialize Bot instance with a default parse mode which will be passed to all API calls
-    bot = Bot(API_TOKEN)
-    # And the run events dispatching
+    # Run events dispatching
     await dp.start_polling(bot)
+
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, stream=sys.stdout)
