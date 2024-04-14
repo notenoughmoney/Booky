@@ -43,14 +43,13 @@ async def process_button_click(message: types.Message, state: FSMContext):
     user = message.from_user.id
     read_books = db.get_read_books(user)
     if len(read_books) < 1:
-        read_books = "У вас ещё нет прочитанных книг"
+        text = "У вас ещё нет прочитанных книг"
     else:
         text = "Книги, которые вы прочитали:"
         for counter, book in enumerate(read_books):
             text += "\n\n№ " + str(counter)
             text += f'\n{book["title"]}'
             text += f'\n{book["author"]}'
-            text += f'\n{book["year"]}'
     await message.answer(text=text, reply_markup=get_library_menu_buttons())
     await state.set_state(States.LIBRARY_MENU)
 
@@ -61,38 +60,55 @@ async def process_button_click(message: types.Message, state: FSMContext):
     await state.set_state(States.ADD_BOOK)
 
 
+@router.message(States.LIBRARY_MENU, F.text == "Назад")
+async def process_button_click(message: types.Message, state: FSMContext):
+    await message.answer(text='Главное меню.\nВыберите опцию из меню:', reply_markup=get_main_menu_buttons())
+    await state.set_state(States.MAIN_MENU)
+
+
 @router.message(States.ADD_BOOK, F.text != "")
 async def process_button_click(message: types.Message, state: FSMContext):
     books = search_books_by_title(message.text)
     # TODO Проверку на уникальность книг
-    # Пока что добавляем только первую попавшуюся книгу
     db.add_book(
         user=message.from_user.id,
         title=books[0]["title"],
         author=books[0]["author"],
         year=books[0]["year"]
     )
+    book = books[0]
     text = f"В вашу библиотеку была добавлена книга:"
+    text += f'\n{book["title"]}'
+    text += f'\n{book["author"]}'
     await message.answer(text=text)
     await state.set_state(States.LIBRARY_MENU)
 
 
 @router.message(States.MAIN_MENU, F.text == "Рекомендации")
 async def process_button_click(message: types.Message, state: FSMContext):
-    await message.answer(f"Этот раздел ещё недоступен")
-    await state.set_state(States.RECS_MENU)
+    user = message.from_user.id
+    recs = db.get_recommendations(user=user)
+    text = "Подборка на основе ваших предпочтений:"
+    if len(recs) < 1:
+        text = "К сожалению, мы не смогли подобрать для вас ничего подходящего..."
+    else:
+        for counter, book in enumerate(recs):
+            counter += 1
+            text += "\n\n№ " + str(counter)
+            text += f'\n{book["title"]}'
+            text += f'\n{book["author"]}'
+    await message.answer(text=text)
 
 
 @router.message(States.MAIN_MENU, F.text == "Новинки")
 async def process_button_click(message: types.Message, state: FSMContext):
     user = message.from_user.id
     newest_books = get_newest_books(user)
-    text = "Новинки, которые вы могли пропустить:"
+    text = "Новинки книг, которые вы могли пропустить:"
     for counter, book in enumerate(newest_books):
         text += "\n\n№ " + str(counter)
         text += f'\n{book["title"]}'
         text += f'\n{book["author"]}'
-        text += f'\n{book["year"]}'
     await message.answer(text=text)
 
 

@@ -1,4 +1,5 @@
 import sqlite3
+from collections import Counter
 
 
 class SQLiteBooks:
@@ -45,6 +46,40 @@ class SQLiteBooks:
     def mark_book_as_read(self, book_id):
         self.cur.execute('UPDATE books SET read=1 WHERE id=?', (book_id,))
         self.conn.commit()
+
+    def get_recommendations(self, user):
+        # Получаем все прочитанные книги, кроме тех, которые прочитал пользователь
+        self.cur.execute('''
+            SELECT id, title, author, year FROM books
+            WHERE user != ? AND read=1
+        ''', (user,))
+        rows = self.cur.fetchall()
+
+        # Получаем книги, которые прочитал пользователь
+        user_books = self.get_read_books(user)
+
+        # Создаем список всех прочитанных книг другими пользователями, кроме книг пользователя user
+        all_books = [{'id': row[0], 'title': row[1], 'author': row[2], 'year': row[3]} for row in rows]
+
+        # Получаем книги, которые прочитал пользователь
+        user_books_ids = [book['id'] for book in user_books]
+
+        # Формируем список рекомендаций в нужном формате, исключая книги, которые пользователь уже прочитал
+        recommendations_list = []
+        counter = 1
+        for book in all_books:
+            if book['id'] not in user_books_ids:
+                book_info = {
+                    "id_message": counter,
+                    "id": book['id'],
+                    "title": book['title'],
+                    "author": book['author'],
+                    "year": book['year']
+                }
+                recommendations_list.append(book_info)
+                counter += 1
+
+        return recommendations_list
 
     def close_connection(self):
         self.cur.close()
