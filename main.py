@@ -28,6 +28,7 @@ class States(StatesGroup):
     RECS_MENU = State()
     NEW_BOOKS_MENU = State()
     ABOUT_MENU = State()
+    GET_VIP_MENU = State()
     ADD_BOOK = State()
 
 
@@ -56,8 +57,28 @@ async def process_button_click(message: types.Message, state: FSMContext):
 
 @router.message(States.LIBRARY_MENU, F.text == "Добавить книгу")
 async def process_button_click(message: types.Message, state: FSMContext):
-    await message.answer(text='Чтобы добавить книгу в библиотеку, введите её название')
-    await state.set_state(States.ADD_BOOK)
+    # Сначала проверяем лимит доступных книг
+    user = message.from_user.id
+    user_status = db.get_user_status(user)
+    read_books_count = db.get_read_books_count(user)
+    if user_status != "VIP" and read_books_count >= 7:
+        await message.answer(text='Для 111 получения дополнительных функций вам необходим VIP-статус')
+        # ПРОДУБЛИРОВАТЬ
+        await bot.send_invoice(
+            message.chat.id,
+            title="Стать VIP",
+            description="С VIP можно сохранять больше книг",
+            provider_token="1744374395:TEST:6b4eada6f5510967807d",
+            currency="rub",
+            photo_url="https://www.nme.com/wp-content/uploads/2016/11/RyanGoslingGettyImages-531518458.jpg",
+            photo_width=315,
+            photo_height=200,
+            prices=[price],
+            payload="test-invoice-payload"
+        )
+    else:
+        await message.answer(text='Чтобы добавить книгу в библиотеку, введите её название')
+        await state.set_state(States.ADD_BOOK)
 
 
 @router.message(States.LIBRARY_MENU, F.text == "Назад")
@@ -124,6 +145,33 @@ async def process_button_click(message: types.Message, state: FSMContext):
     except Exception as e:
         pass
     await message.answer(text=text)
+
+price = types.LabeledPrice(label="Стать VIP", amount=10*100)
+@router.message(States.MAIN_MENU, F.text == "Стать VIP")
+async def send_invoice(message: types.Message, state: FSMContext):
+    # ПРОДУБЛИРОВАТЬ
+    await bot.send_invoice(
+        message.chat.id,
+        title="Стать VIP",
+        description="С VIP можно сохранять больше книг",
+        provider_token="1744374395:TEST:6b4eada6f5510967807d",
+        currency="rub",
+        photo_url="img.png",
+        prices=[price],
+        payload="test-invoice-payload"
+    )
+
+
+@router.pre_checkout_query(lambda query: True)
+async def pre_checkout_query(pre_checkout_q: types.PreCheckoutQuery):
+    await bot.answer_pre_checkout_query(pre_checkout_q.id, ok=True)
+
+
+@router.message(F.successful_payment)
+async def successful_payment_handler(message: types.Message):
+    user = message.from_user.id
+    await message.answer(text="Оплата прошла успешо.\nВы получили статус VIP и можете сохранять больше книг!")
+    db.make_vip(user=user)
 
 
 async def main() -> None:

@@ -5,7 +5,7 @@ from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 def get_main_menu_buttons():
     buttons = [
         [KeyboardButton(text="Моя библиотека"), KeyboardButton(text="Рекомендации")],
-        [KeyboardButton(text="Новинки"), KeyboardButton(text="О нас")],
+        [KeyboardButton(text="Новинки"), KeyboardButton(text="О нас"), KeyboardButton(text="Стать VIP")],
     ]
     reply_markup = ReplyKeyboardMarkup(resize_keyboard=True, keyboard=buttons)
     return reply_markup
